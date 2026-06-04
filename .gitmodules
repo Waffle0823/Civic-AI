@@ -1,0 +1,6 @@
+[submodule "services/core-api"]
+	path = services/core-api
+	url = https://gitlab.waffly.xyz/magic-girls/civic-ai/core-api.git
+[submodule "services/attachment-analyzer"]
+	path = services/attachment-analyzer
+	url = https://gitlab.waffly.xyz/magic-girls/civic-ai/attachment-analyzer.git
