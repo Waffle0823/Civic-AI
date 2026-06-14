@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +17,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -29,8 +25,6 @@ services:
 
   kafka:
     image: apache/kafka:3.8.0
-    ports:
-      - "9094:9094"
     environment:
       KAFKA_NODE_ID: 0
       KAFKA_PROCESS_ROLES: controller,broker
@@ -98,6 +92,9 @@ services:
       APP_SERVER__JWT_SECRET: change_me_in_production
       APP_SERVER__JWT_COMPANY_NAME: CivicAI
       APP_SERVER__JWT_AUDIENCE: CivicAI
+      APP_SERVER__JWT_EXPIRATION_SECONDS: 3600
+      APP_SERVER__ENABLE_SWAGGER_UI: "true"
+      APP_SERVER__ENABLE_OPEN_API: "true"
       APP_DATABASE__HOST: postgres
       APP_DATABASE__PORT: 5432
       APP_DATABASE__USER: postgres
@@ -105,7 +102,16 @@ services:
       APP_DATABASE__DATABASE: postgres
       APP_REDIS__HOST: redis
       APP_REDIS__PORT: 6379
+      APP_REDIS__DATABASE: 0
       APP_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
+      APP_API__USERS__USER_NAME_REGEX: "^[a-zA-Z0-9_]{3,32}$"
+      APP_API__USERS__PASSWORD_REGEX: "^.{8,128}$"
+      APP_API__COMPLAINTS__TITLE_MIN_LENGTH: 1
+      APP_API__COMPLAINTS__TITLE_MAX_LENGTH: 200
+      APP_API__COMPLAINTS__CONTENT_MIN_LENGTH: 1
+      APP_API__COMPLAINTS__CONTENT_MAX_LENGTH: 5000
+      APP_API__COMPLAINTS__CATEGORY_MIN_COUNT: 1
+      APP_API__COMPLAINTS__CATEGORY_MAX_COUNT: 10
       RUST_LOG: info
     depends_on:
       migrate:
