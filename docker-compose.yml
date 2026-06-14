@@ -76,11 +76,10 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: postgres
-      GITLAB_TOKEN: ${GITLAB_TOKEN:-}
     entrypoint: ["/bin/sh", "-c"]
     command: |
-      apk add --no-cache git &&
-      git clone --depth 1 https://oauth2:$$GITLAB_TOKEN@gitlab.waffly.xyz/inner-voice/civic-ai/core-api.git /repo &&
+      apk add git &&
+      git clone --depth 1 https://gitlab.waffly.xyz/inner-voice/civic-ai/core-api.git /repo &&
       for f in $$(ls /repo/migrations/*.sql | sort); do
         echo "Applying $$f";
         psql -h postgres -U postgres -d postgres -f $$f || exit 1;
