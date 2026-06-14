@@ -131,6 +131,7 @@ services:
     environment:
       APP_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
       APP_KAFKA__TOPIC: complaint.created
+      APP_KAFKA__OUTPUT_TOPIC: complaint.analyzed
       APP_KAFKA__GROUP_ID: complaint-analyzer
       APP_LLM__BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
       APP_LLM__API_KEY: ${LLM_API_KEY:-none}
