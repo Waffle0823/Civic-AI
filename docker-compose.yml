@@ -57,7 +57,8 @@ services:
       - -c
       - >-
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic complaint.created --partitions 3 --replication-factor 1 &&
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic complaint.analyzed --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic complaint.analyzed --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic complaint.tasks_ready --partitions 3 --replication-factor 1
     restart: on-failure
 
   migrate:
@@ -133,6 +134,20 @@ services:
       APP_KAFKA__TOPIC: complaint.created
       APP_KAFKA__OUTPUT_TOPIC: complaint.analyzed
       APP_KAFKA__GROUP_ID: complaint-analyzer
+      APP_LLM__BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      APP_LLM__API_KEY: ${LLM_API_KEY:-none}
+      APP_LLM__MODEL: ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
+  task-manager:
+    image: registry.waffly.xyz/inner-voice/civic-ai/task-manager:latest
+    environment:
+      APP_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
+      APP_KAFKA__TOPIC: complaint.analyzed
+      APP_KAFKA__OUTPUT_TOPIC: complaint.tasks_ready
+      APP_KAFKA__GROUP_ID: task-manager
       APP_LLM__BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
       APP_LLM__API_KEY: ${LLM_API_KEY:-none}
       APP_LLM__MODEL: ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}

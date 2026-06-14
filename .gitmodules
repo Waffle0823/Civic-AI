@@ -4,3 +4,6 @@
 [submodule "services/complaint-analyzer"]
 	path = services/complaint-analyzer
 	url = https://gitlab.waffly.xyz/inner-voice/civic-ai/complaint-analyzer.git
+[submodule "services/task-manager"]
+	path = services/task-manager
+	url = https://gitlab.waffly.xyz/inner-voice/civic-ai/task-manager.git
