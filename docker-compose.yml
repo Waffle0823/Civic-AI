@@ -28,7 +28,7 @@ services:
       retries: 5
 
   kafka:
-    image: bitnami/kafka:3.9
+    image: bitnami/kafka:3.8
     ports:
       - "9094:9094"
     environment:
@@ -50,7 +50,7 @@ services:
       start_period: 30s
 
   kafka-init:
-    image: bitnami/kafka:3.9
+    image: bitnami/kafka:3.8
     depends_on:
       kafka:
         condition: service_healthy
@@ -78,7 +78,7 @@ services:
     restart: on-failure
 
   core-api:
-    build: ./services/core-api
+    image: registry.waffly.xyz/inner-voice/civic-ai/core-api:latest
     ports:
       - "8080:8080"
     environment:
@@ -105,7 +105,7 @@ services:
         condition: service_completed_successfully
 
   complaint-analyzer:
-    build: ./services/complaint-analyzer
+    image: registry.waffly.xyz/inner-voice/civic-ai/complaint-analyzer:latest
     environment:
       APP_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
       APP_KAFKA__TOPIC: complaint.created
