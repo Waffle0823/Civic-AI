@@ -76,14 +76,16 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: postgres
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      apk add git &&
-      git clone --depth 1 https://gitlab.waffly.xyz/inner-voice/civic-ai/core-api.git /repo &&
-      for f in $$(ls /repo/migrations/*.sql | sort); do
-        echo "Applying $$f";
-        psql -h postgres -U postgres -d postgres -f $$f || exit 1;
-      done
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        apk add git &&
+        git clone --depth 1 https://gitlab.waffly.xyz/inner-voice/civic-ai/core-api.git /repo &&
+        for f in $$(ls /repo/migrations/*.sql | sort); do
+          echo "Applying $$f" &&
+          psql -h postgres -U postgres -d postgres -f $$f || exit 1;
+        done
     restart: on-failure
 
   core-api:
