@@ -74,16 +74,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./services/core-api/migrations:/migrations:ro
     environment:
       PGPASSWORD: postgres
+      GITLAB_TOKEN: ${GITLAB_TOKEN:-}
     entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "for f in $$(ls /migrations/*.sql | sort); do
-        echo \"Applying $$f\";
+    command: |
+      apk add --no-cache git &&
+      git clone --depth 1 https://oauth2:$$GITLAB_TOKEN@gitlab.waffly.xyz/inner-voice/civic-ai/core-api.git /repo &&
+      for f in $$(ls /repo/migrations/*.sql | sort); do
+        echo "Applying $$f";
         psql -h postgres -U postgres -d postgres -f $$f || exit 1;
-      done"
+      done
     restart: on-failure
 
   core-api:
