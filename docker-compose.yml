@@ -40,6 +40,7 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
