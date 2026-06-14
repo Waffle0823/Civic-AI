@@ -53,17 +53,11 @@ services:
       kafka:
         condition: service_healthy
     entrypoint:
-      - /opt/kafka/bin/kafka-topics.sh
-      - --bootstrap-server
-      - kafka:9092
-      - --create
-      - --if-not-exists
-      - --topic
-      - complaint.created
-      - --partitions
-      - "3"
-      - --replication-factor
-      - "1"
+      - /bin/sh
+      - -c
+      - >-
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic complaint.created --partitions 3 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic complaint.analyzed --partitions 3 --replication-factor 1
     restart: on-failure
 
   migrate:
@@ -130,9 +124,9 @@ services:
       APP_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
       APP_KAFKA__TOPIC: complaint.created
       APP_KAFKA__GROUP_ID: complaint-analyzer
-      APP_VLLM__BASE_URL: ${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
-      APP_VLLM__API_KEY: ${VLLM_API_KEY:-none}
-      APP_VLLM__MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      APP_LLM__BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      APP_LLM__API_KEY: ${LLM_API_KEY:-none}
+      APP_LLM__MODEL: ${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
     depends_on:
       kafka-init:
         condition: service_completed_successfully

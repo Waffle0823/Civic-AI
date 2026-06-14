@@ -61,10 +61,10 @@ Python Kafka consumer. Reads from the `complaint.created` topic and sends each c
 ### Run
 
 ```bash
-# Point complaint-analyzer at your vLLM server
-export VLLM_BASE_URL=http://your-vllm-host:8000/v1
-export VLLM_API_KEY=your-key          # omit if not required
-export VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+# Point complaint-analyzer at your LLM server
+export LLM_BASE_URL=http://your-llm-host:8000/v1
+export LLM_API_KEY=your-key          # omit if not required
+export LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
 
 docker compose up --build
 ```
@@ -126,9 +126,15 @@ All services share the same convention: environment variables with an `APP_` pre
 |----------|---------|-------------|
 | `APP_KAFKA__BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
 | `APP_KAFKA__TOPIC` | `complaints` | Topic to consume |
+| `APP_KAFKA__OUTPUT_TOPIC` | `complaint.analyzed` | Topic to publish analysis results |
 | `APP_KAFKA__GROUP_ID` | `complaint-analyzer` | Consumer group |
-| `APP_VLLM__BASE_URL` | `http://localhost:8000/v1` | vLLM API base URL |
-| `APP_VLLM__API_KEY` | `none` | vLLM API key |
-| `APP_VLLM__MODEL` | `Qwen/Qwen2.5-7B-Instruct` | Model to use |
-| `APP_VLLM__MAX_TOKENS` | `512` | Max tokens per response |
-| `APP_VLLM__TEMPERATURE` | `0.1` | Sampling temperature |
+| `APP_KAFKA__AUTO_OFFSET_RESET` | `earliest` | Offset reset policy (`earliest`, `latest`, `none`) |
+| `APP_KAFKA__ENABLE_AUTO_COMMIT` | `false` | Whether to auto-commit offsets |
+| `APP_KAFKA__SESSION_TIMEOUT_MS` | `30000` | Consumer session timeout |
+| `APP_KAFKA__MAX_POLL_INTERVAL_MS` | `300000` | Max time between polls before rebalance |
+| `APP_KAFKA__POLL_TIMEOUT_S` | `1.0` | Poll call timeout in seconds |
+| `APP_LLM__BASE_URL` | `http://localhost:8000/v1` | LLM API base URL (OpenAI-compatible) |
+| `APP_LLM__API_KEY` | `none` | LLM API key |
+| `APP_LLM__MODEL` | `Qwen/Qwen2.5-7B-Instruct` | Model to use |
+| `APP_LLM__MAX_TOKENS` | `512` | Max tokens per response |
+| `APP_LLM__TEMPERATURE` | `0.1` | Sampling temperature |
