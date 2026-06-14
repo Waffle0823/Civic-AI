@@ -60,6 +60,23 @@ services:
         --topic complaint.created --partitions 3 --replication-factor 1"
     restart: on-failure
 
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./services/core-api/migrations:/migrations:ro
+    environment:
+      PGPASSWORD: postgres
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "for f in $$(ls /migrations/*.sql | sort); do
+        echo \"Applying $$f\";
+        psql -h postgres -U postgres -d postgres -f $$f || exit 1;
+      done"
+    restart: on-failure
+
   core-api:
     build: ./services/core-api
     ports:
@@ -80,8 +97,8 @@ services:
       APP_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
       RUST_LOG: info
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       kafka-init:
