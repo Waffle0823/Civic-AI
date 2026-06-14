@@ -9,22 +9,25 @@ Client
   │
   ▼
 core-api (REST, :8080)
-  ├── PostgreSQL  (users, complaints)
-  ├── Redis       (JWT session blacklist)
-  └── Kafka ──► complaint.created topic
-                        │
-                        ▼
-             complaint-analyzer
-                        │
-                        ▼
-                   vLLM API (external)
+  ├── PostgreSQL  (users, complaints, categories, tasks)
+  ├── Redis       (JWT blacklist)
+  ├── Kafka ──► complaint.created topic
+  │                     │
+  │                     ▼
+  │          complaint-analyzer
+  │                     │
+  │                     ▼
+  │               LLM API (external)
+  │                     │
+  │                     ▼
+  └──── Kafka ◄── complaint.analyzed topic
 ```
 
 ## Services
 
 ### core-api
 
-Rust/Actix-web REST API. Handles user registration, JWT authentication, and complaint submission. Publishes a `complaint.created` event to Kafka for every new complaint.
+Rust/Actix-web REST API. Handles user registration, JWT authentication, complaint submission, category management, and task tracking. Publishes `complaint.created` events to Kafka and consumes `complaint.analyzed` events to persist AI analysis results. Seeds an admin user on startup.
 
 | | |
 |---|---|
@@ -37,19 +40,38 @@ Rust/Actix-web REST API. Handles user registration, JWT authentication, and comp
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `POST` | `/users` | — | Register a new user |
-| `POST` | `/auth/login` | — | Login, returns JWT |
-| `POST` | `/auth/logout` | Bearer | Revoke JWT |
+| `GET` | `/users` | Bearer (admin) | List all users |
+| `GET` | `/users/me` | Bearer | Get current user profile |
+| `GET` | `/users/{id}` | Bearer (admin) | Get user by ID |
+| `PATCH` | `/users/me` | Bearer | Update current user |
+| `PATCH` | `/users/{id}` | Bearer (admin) | Update user by ID |
+| `DELETE` | `/users/{id}` | Bearer (admin) | Delete user by ID |
+| `POST` | `/auth/login` | — | Login, returns access + refresh tokens |
+| `POST` | `/auth/logout` | Bearer | Revoke access token |
+| `POST` | `/auth/refresh` | — | Refresh access token |
+| `GET` | `/complaints` | Bearer | List complaints (paginated, role-scoped) |
 | `POST` | `/complaints` | Bearer | Submit a complaint |
+| `GET` | `/complaints/{id}` | Bearer | Get complaint by ID |
+| `PATCH` | `/complaints/{id}` | Bearer | Update complaint |
+| `GET` | `/complaints/{id}/tasks` | Bearer | List tasks for a complaint |
+| `POST` | `/complaints/{id}/tasks` | Bearer | Create a task for a complaint |
+| `GET` | `/complaints/{id}/tasks/{task_id}` | Bearer | Get task by ID |
+| `PATCH` | `/complaints/{id}/tasks/{task_id}` | Bearer | Update task |
+| `GET` | `/categories` | Bearer | List categories |
+| `POST` | `/categories` | Bearer (admin) | Create a category |
+| `GET` | `/categories/{id}` | Bearer | Get category by ID |
+| `PATCH` | `/categories/{id}` | Bearer (admin) | Update category |
+| `DELETE` | `/categories/{id}` | Bearer (admin) | Delete category |
 | `GET` | `/swagger-ui/` | — | Interactive API docs |
 
 ### complaint-analyzer
 
-Python Kafka consumer. Reads from the `complaint.created` topic and sends each complaint to a vLLM-backed LLM (OpenAI-compatible API) for analysis — extracting sentiment, urgency, categories, and a summary.
+Python Kafka consumer. Reads from the `complaint.created` topic and sends each complaint to an OpenAI-compatible LLM API for analysis — extracting sentiment, urgency, categories, and a summary. Publishes results to `complaint.analyzed`.
 
 | | |
 |---|---|
 | Port | None (consumer only) |
-| Dependencies | Kafka, vLLM API |
+| Dependencies | Kafka, LLM API |
 
 ## Getting Started
 
@@ -71,7 +93,7 @@ docker compose up --build
 
 The API is available at `http://localhost:8080`. Swagger UI at `http://localhost:8080/swagger-ui/`.
 
-Kafka is reachable from the host at `localhost:9094` (EXTERNAL listener).
+An admin account is seeded on first startup with the credentials set via `APP_API__ADMIN__*` (default: `admin` / `Admin@123!`).
 
 ### Quick test
 
@@ -93,7 +115,7 @@ curl -s -X POST http://localhost:8080/complaints \
   -d '{
     "title": "Broken streetlight",
     "content": "The streetlight on Main St has been out for two weeks.",
-    "categories": ["infrastructure"]
+    "priority": 3
   }'
 ```
 
@@ -108,7 +130,8 @@ All services share the same convention: environment variables with an `APP_` pre
 | `APP_SERVER__HOST` | `127.0.0.1` | Bind address |
 | `APP_SERVER__PORT` | `8080` | Bind port |
 | `APP_SERVER__JWT_SECRET` | `change_me` | JWT signing secret — **change in production** |
-| `APP_SERVER__JWT_EXPIRATION_SECONDS` | `3600` | Token lifetime |
+| `APP_SERVER__JWT_EXPIRATION_SECONDS` | `3600` | Access token lifetime (seconds) |
+| `APP_SERVER__JWT_REFRESH_EXPIRATION_SECONDS` | `604800` | Refresh token lifetime (seconds) |
 | `APP_DATABASE__HOST` | `127.0.0.1` | PostgreSQL host |
 | `APP_DATABASE__PORT` | `5432` | PostgreSQL port |
 | `APP_DATABASE__USER` | `postgres` | PostgreSQL user |
@@ -118,6 +141,16 @@ All services share the same convention: environment variables with an `APP_` pre
 | `APP_REDIS__PORT` | `6379` | Redis port |
 | `APP_REDIS__PASSWORD` | — | Redis password |
 | `APP_KAFKA__BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
+| `APP_API__COMPLAINTS__PRIORITY_MIN` | `1` | Minimum complaint priority value |
+| `APP_API__COMPLAINTS__PRIORITY_MAX` | `5` | Maximum complaint priority value |
+| `APP_API__CATEGORIES__NAME_MIN_LENGTH` | `1` | Category name minimum length |
+| `APP_API__CATEGORIES__NAME_MAX_LENGTH` | `100` | Category name maximum length |
+| `APP_API__TASKS__TITLE_MIN_LENGTH` | `1` | Task title minimum length |
+| `APP_API__TASKS__TITLE_MAX_LENGTH` | `200` | Task title maximum length |
+| `APP_API__TASKS__DESCRIPTION_MAX_LENGTH` | `2000` | Task description maximum length |
+| `APP_API__ADMIN__USER_NAME` | `admin` | Seeded admin username |
+| `APP_API__ADMIN__EMAIL` | `admin@example.com` | Seeded admin email |
+| `APP_API__ADMIN__PASSWORD` | `Admin@123!` | Seeded admin password — **change in production** |
 | `RUST_LOG` | `error` | Log filter (e.g. `info`, `debug`) |
 
 ### complaint-analyzer
