@@ -7,3 +7,12 @@
 [submodule "services/task-manager"]
 	path = services/task-manager
 	url = https://gitlab.waffly.xyz/inner-voice/civic-ai/task-manager.git
+[submodule "services/attachment-analyzer"]
+	path = services/attachment-analyzer
+	url = https://gitlab.waffly.xyz/inner-voice/civic-ai/attachment-analyzer.git
+[submodule "pages/page"]
+	path = pages/page
+	url = https://gitlab.waffly.xyz/inner-voice/civic-ai/page.git
+[submodule "pages/page-admin"]
+	path = pages/page-admin
+	url = https://gitlab.waffly.xyz/inner-voice/civic-ai/page-admin.git
