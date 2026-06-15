@@ -1,33 +1,36 @@
 # Civic AI
 
-A complaint management platform with AI-powered analysis. Users submit complaints through a REST API; each complaint is published to Kafka and picked up by an LLM-based analyzer that produces sentiment scores, urgency ratings, categories, and summaries.
+A complaint management platform with AI-powered analysis. Users submit complaints through a REST API or web frontend; each complaint is published to Kafka and processed by an LLM-based pipeline that classifies categories, rates urgency, generates analysis, and creates action tasks for staff.
 
 ## Architecture
 
 ```
-Client
-  │
-  ▼
-core-api (REST, :8080)
-  ├── PostgreSQL  (users, complaints, categories, tasks)
-  ├── Redis       (JWT blacklist)
-  ├── Kafka ──► complaint.created topic
-  │                     │
-  │                     ▼
-  │          complaint-analyzer
-  │                     │
-  │                     ▼
-  │               LLM API (external)
-  │                     │
-  │                     ▼
-  └──── Kafka ◄── complaint.analyzed topic
+page (:3000)          page-admin (:3001)
+     │                       │
+     └──────────┬────────────┘
+                │
+                ▼
+          core-api (:8080)
+           ├── PostgreSQL  (users, complaints, categories, tasks)
+           ├── Redis       (JWT session)
+           └── Kafka
+                    │ complaint.created
+                    ▼
+         complaint-analyzer ──► LLM API (external)
+                    │ complaint.analyzed
+                    ├──────────────────────► core-api (상태·카테고리·긴급도 업데이트)
+                    ▼
+            task-manager ──► LLM API (external)
+                    │ complaint.tasks_ready
+                    ▼
+               core-api (태스크 자동 생성)
 ```
 
 ## Services
 
 ### core-api
 
-Rust/Actix-web REST API. Handles user registration, JWT authentication, complaint submission, category management, and task tracking. Publishes `complaint.created` events to Kafka and consumes `complaint.analyzed` events to persist AI analysis results. Seeds an admin user on startup.
+Rust/Axum REST API. Handles user registration, JWT authentication, complaint submission, category management, and task tracking. Publishes `complaint.created` events to Kafka, and consumes `complaint.analyzed` (to persist AI analysis) and `complaint.tasks_ready` (to auto-create staff tasks).
 
 | | |
 |---|---|
@@ -66,12 +69,61 @@ Rust/Actix-web REST API. Handles user registration, JWT authentication, complain
 
 ### complaint-analyzer
 
-Python Kafka consumer. Reads from the `complaint.created` topic and sends each complaint to an OpenAI-compatible LLM API for analysis — extracting sentiment, urgency, categories, and a summary. Publishes results to `complaint.analyzed`.
+Python Kafka consumer. Reads `complaint.created` events, calls an OpenAI-compatible LLM API to classify the category, rate urgency (1–5), and generate an analysis summary in Korean. Publishes results to `complaint.analyzed`.
 
 | | |
 |---|---|
 | Port | None (consumer only) |
 | Dependencies | Kafka, LLM API |
+
+### task-manager
+
+Python Kafka consumer. Reads `complaint.analyzed` events and calls an OpenAI-compatible LLM API to generate 2–5 concrete action tasks for staff. Publishes results to `complaint.tasks_ready`, which core-api picks up to auto-create tasks in the database.
+
+| | |
+|---|---|
+| Port | None (consumer only) |
+| Dependencies | Kafka, LLM API |
+
+### page
+
+User-facing frontend (React + Vite). Allows citizens to register, log in, submit complaints, and track their status.
+
+| | |
+|---|---|
+| Port | `3000` |
+| Dependencies | core-api |
+
+**Pages**
+
+| Path | Description |
+|------|-------------|
+| `/login` | Login |
+| `/register` | Register |
+| `/dashboard` | My complaints list |
+| `/complaints/new` | Submit a new complaint |
+| `/complaints/:id` | Complaint detail and status |
+
+### page-admin
+
+Admin-facing frontend (React + Vite). Provides staff and administrators with a dashboard to manage complaints, users, categories, and tasks.
+
+| | |
+|---|---|
+| Port | `3001` |
+| Dependencies | core-api |
+
+**Pages**
+
+| Path | Description |
+|------|-------------|
+| `/login` | Admin login |
+| `/dashboard` | Overview and statistics |
+| `/complaints` | All complaints list |
+| `/complaints/:id` | Complaint detail and task management |
+| `/users` | User management |
+| `/categories` | Category management |
+| `/tasks` | Task list |
 
 ## Getting Started
 
@@ -83,7 +135,7 @@ Python Kafka consumer. Reads from the `complaint.created` topic and sends each c
 ### Run
 
 ```bash
-# Point complaint-analyzer at your LLM server
+# Point complaint-analyzer and task-manager at your LLM server
 export LLM_BASE_URL=http://your-llm-host:8000/v1
 export LLM_API_KEY=your-key          # omit if not required
 export LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
@@ -91,9 +143,32 @@ export LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8080`. Swagger UI at `http://localhost:8080/swagger-ui/`.
+| Service | URL |
+|---------|-----|
+| User frontend | `http://localhost:3000` |
+| Admin frontend | `http://localhost:3001` |
+| REST API | `http://localhost:8080` |
+| Swagger UI | `http://localhost:8080/swagger-ui/` |
 
 An admin account is seeded on first startup with the credentials set via `APP_API__ADMIN__*` (default: `admin` / `Admin@123!`).
+
+### Run frontends locally (optional)
+
+If you prefer to run the frontends outside of Docker:
+
+```bash
+# User frontend
+cd pages/page
+npm install
+npm run dev        # http://localhost:3000
+
+# Admin frontend
+cd pages/page-admin
+npm install
+npm run dev        # http://localhost:3001
+```
+
+Both dev servers proxy `/api/*` requests to `http://localhost:8080` by default.
 
 ### Quick test
 
@@ -141,8 +216,8 @@ All services share the same convention: environment variables with an `APP_` pre
 | `APP_REDIS__PORT` | `6379` | Redis port |
 | `APP_REDIS__PASSWORD` | — | Redis password |
 | `APP_KAFKA__BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
-| `APP_API__COMPLAINTS__PRIORITY_MIN` | `1` | Minimum complaint priority value |
-| `APP_API__COMPLAINTS__PRIORITY_MAX` | `5` | Maximum complaint priority value |
+| `APP_API__COMPLAINTS__PRIORITY_MIN` | `1` | Minimum urgency value |
+| `APP_API__COMPLAINTS__PRIORITY_MAX` | `5` | Maximum urgency value |
 | `APP_API__CATEGORIES__NAME_MIN_LENGTH` | `1` | Category name minimum length |
 | `APP_API__CATEGORIES__NAME_MAX_LENGTH` | `100` | Category name maximum length |
 | `APP_API__TASKS__TITLE_MIN_LENGTH` | `1` | Task title minimum length |
@@ -158,10 +233,29 @@ All services share the same convention: environment variables with an `APP_` pre
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APP_KAFKA__BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
-| `APP_KAFKA__TOPIC` | `complaints` | Topic to consume |
+| `APP_KAFKA__TOPIC` | `complaint.created` | Topic to consume |
 | `APP_KAFKA__OUTPUT_TOPIC` | `complaint.analyzed` | Topic to publish analysis results |
 | `APP_KAFKA__GROUP_ID` | `complaint-analyzer` | Consumer group |
 | `APP_KAFKA__AUTO_OFFSET_RESET` | `earliest` | Offset reset policy (`earliest`, `latest`, `none`) |
+| `APP_KAFKA__ENABLE_AUTO_COMMIT` | `false` | Whether to auto-commit offsets |
+| `APP_KAFKA__SESSION_TIMEOUT_MS` | `30000` | Consumer session timeout |
+| `APP_KAFKA__MAX_POLL_INTERVAL_MS` | `300000` | Max time between polls before rebalance |
+| `APP_KAFKA__POLL_TIMEOUT_S` | `1.0` | Poll call timeout in seconds |
+| `APP_LLM__BASE_URL` | `http://localhost:8000/v1` | LLM API base URL (OpenAI-compatible) |
+| `APP_LLM__API_KEY` | `none` | LLM API key |
+| `APP_LLM__MODEL` | `Qwen/Qwen2.5-7B-Instruct` | Model to use |
+| `APP_LLM__MAX_TOKENS` | `512` | Max tokens per response |
+| `APP_LLM__TEMPERATURE` | `0.1` | Sampling temperature |
+
+### task-manager
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_KAFKA__BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
+| `APP_KAFKA__TOPIC` | `complaint.analyzed` | Topic to consume |
+| `APP_KAFKA__OUTPUT_TOPIC` | `complaint.tasks_ready` | Topic to publish task suggestions |
+| `APP_KAFKA__GROUP_ID` | `task-manager` | Consumer group |
+| `APP_KAFKA__AUTO_OFFSET_RESET` | `earliest` | Offset reset policy |
 | `APP_KAFKA__ENABLE_AUTO_COMMIT` | `false` | Whether to auto-commit offsets |
 | `APP_KAFKA__SESSION_TIMEOUT_MS` | `30000` | Consumer session timeout |
 | `APP_KAFKA__MAX_POLL_INTERVAL_MS` | `300000` | Max time between polls before rebalance |
